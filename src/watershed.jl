@@ -4,7 +4,9 @@ struct PixelKey{CT}
     val::CT
     time_step::Int
 end
-isless(a::PixelKey{T}, b::PixelKey{T}) where {T} = (a.val < b.val) || (a.val == b.val && a.time_step < b.time_step)
+isless(a::PixelKey{T}, b::PixelKey{T}) where {T} =
+            (a.val < b.val) ||
+            (a.val == b.val && a.time_step < b.time_step)
 
 """
 ```
@@ -29,7 +31,7 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
     end
 
     segments = copy(markers)
-    pq = PriorityQueue{CartesianIndex{N}, PixelKey{T}}()
+    pq = PriorityQueue{NTuple{2,CartesianIndex{N}}, PixelKey{T}}()
     time_step = 0
 
     R = CartesianIndices(axes(img))
@@ -38,8 +40,7 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
         if markers[i] > 0
             for j in CartesianIndices(_colon(max(Istart,i-one(i)), min(i+one(i),Iend)))
                 if segments[j] == 0
-                    segments[j] = markers[i]
-                    enqueue!(pq, j, PixelKey(img[i], time_step))
+                    enqueue!(pq, (j, i), PixelKey(img[j], time_step))
                     time_step += 1
                 end
             end
@@ -47,13 +48,12 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
     end
 
     while !isempty(pq)
-        current = dequeue!(pq)
-        segments_current = segments[current]
-        img_current = img[current]
+        current, prev = dequeue!(pq)
+        segments[current] != 0 && continue
+        segments[current] = segments[prev]
         for j in CartesianIndices(_colon(max(Istart,current-one(current)), min(current+one(current),Iend)))
             if segments[j] == 0
-                segments[j] = segments_current
-                enqueue!(pq, j, PixelKey(img_current, time_step))
+                enqueue!(pq, (j, current), PixelKey(img[j], time_step))
                 time_step += 1
             end
         end
