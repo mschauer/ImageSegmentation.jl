@@ -4,9 +4,8 @@ struct PixelKey{CT}
     val::CT
     time_step::Int
 end
-isless(a::PixelKey{T}, b::PixelKey{T}) where {T} =
-            (a.val < b.val) ||
-            (a.val == b.val && a.time_step < b.time_step)
+isless(a::PixelKey{T}, b::PixelKey{T}) where {T} = (a.val < b.val) ||
+                                                   (a.val == b.val && a.time_step < b.time_step)
 
 """
 ```
@@ -29,6 +28,10 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
     if axes(img) != axes(markers)
         error("image size doesn't match marker image size")
     end
+    sentinel = typemax(S)
+    if sentinel in markers
+        error("typemax($S) not allowed as markers of type $S")
+    end
 
     segments = copy(markers)
     pq = PriorityQueue{NTuple{2,CartesianIndex{N}}, PixelKey{T}}()
@@ -40,6 +43,7 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
         if markers[i] > 0
             for j in CartesianIndices(_colon(max(Istart,i-one(i)), min(i+one(i),Iend)))
                 if segments[j] == 0
+                    segments[j] = sentinel # no later source has a chance to fill this pixel
                     enqueue!(pq, (j, i), PixelKey(img[j], time_step))
                     time_step += 1
                 end
@@ -49,10 +53,11 @@ function watershed(img::AbstractArray{T, N}, markers::AbstractArray{S,N}) where 
 
     while !isempty(pq)
         current, prev = dequeue!(pq)
-        segments[current] != 0 && continue
+        segments[current] != 0 && segments[current] != sentinel && continue
         segments[current] = segments[prev]
         for j in CartesianIndices(_colon(max(Istart,current-one(current)), min(current+one(current),Iend)))
             if segments[j] == 0
+                segments[j] = sentinel
                 enqueue!(pq, (j, current), PixelKey(img[j], time_step))
                 time_step += 1
             end
